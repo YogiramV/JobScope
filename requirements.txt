@@ -4,3 +4,4 @@ dotenv
 json
 serpapi
 pyspark
+psycopg2
