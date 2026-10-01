@@ -8,6 +8,46 @@ from queries import (
 )
 
 
+INDIAN_STATES = {
+    "Andhra Pradesh",
+    "Arunachal Pradesh",
+    "Assam",
+    "Bihar",
+    "Chhattisgarh",
+    "Goa",
+    "Gujarat",
+    "Haryana",
+    "Himachal Pradesh",
+    "Jharkhand",
+    "Karnataka",
+    "Kerala",
+    "Madhya Pradesh",
+    "Maharashtra",
+    "Manipur",
+    "Meghalaya",
+    "Mizoram",
+    "Nagaland",
+    "Odisha",
+    "Punjab",
+    "Rajasthan",
+    "Sikkim",
+    "Tamil Nadu",
+    "Telangana",
+    "Tripura",
+    "Uttar Pradesh",
+    "Uttarakhand",
+    "West Bengal",
+    "Andaman and Nicobar Islands",
+    "Chandigarh",
+    "Dadra and Nagar Haveli and Daman and Diu",
+    "Delhi",
+    "Jammu and Kashmir",
+    "Ladakh",
+    "Lakshadweep",
+    "Puducherry"
+}
+
+
 def load_jobs(
     processed_path,
     role,
@@ -49,11 +89,48 @@ def load_jobs(
             )
 
             # Parse location
-            location_parts = job["location"].split(",")
+            location_parts = [
+                part.strip()
+                for part in job["location"].split(",")
+                if part.strip()
+            ]
 
-            city = location_parts[0].strip()
-            state = location_parts[1].strip() if len(
-                location_parts) > 1 else None
+            if len(location_parts) >= 2:
+
+                # Example:
+                # Coimbatore, Tamil Nadu
+                city = location_parts[0]
+                state = location_parts[1]
+
+            elif len(location_parts) == 1:
+
+                location = location_parts[0]
+
+                # Example:
+                # India
+                if location.lower() == country.lower():
+                    city = None
+                    state = None
+
+                # Example:
+                # Tamil Nadu
+                elif any(
+                    location.lower() == state_name.lower()
+                    for state_name in INDIAN_STATES
+                ):
+                    city = None
+                    state = location
+
+                # Example:
+                # Coimbatore
+                else:
+                    city = location
+                    state = None
+
+            else:
+
+                city = None
+                state = None
 
             # Get location
             location_id = get_or_create_location(
