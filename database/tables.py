@@ -20,7 +20,7 @@ def create_tables():
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS locations (
                     location_id BIGSERIAL PRIMARY KEY,
-                    city VARCHAR(100) NOT NULL,
+                    city VARCHAR(100),
                     state VARCHAR(100),
                     country VARCHAR(100) NOT NULL,
                     location_name VARCHAR(255) NOT NULL,
