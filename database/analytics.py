@@ -414,3 +414,113 @@ def get_monthly_job_counts():
 
     finally:
         conn.close()
+
+
+def get_skill_demand():
+    # Get skill demand
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    s.skill_name,
+                    COUNT(DISTINCT js.jobscope_job_id) AS job_count
+                FROM job_skills js
+                JOIN skills s
+                    ON js.skill_id = s.skill_id
+                GROUP BY s.skill_id, s.skill_name
+                ORDER BY job_count DESC;
+            """)
+
+            return cur.fetchall()
+
+    finally:
+        conn.close()
+
+
+def get_skills_by_role(role):
+    # Get skills by role
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    s.skill_name,
+                    COUNT(DISTINCT js.jobscope_job_id) AS job_count
+                FROM job_skills js
+                JOIN skills s
+                    ON js.skill_id = s.skill_id
+                JOIN jobs j
+                    ON js.jobscope_job_id = j.jobscope_job_id
+                WHERE j.title ILIKE %s
+                GROUP BY s.skill_id, s.skill_name
+                ORDER BY job_count DESC;
+            """, (f"%{role}%",))
+
+            return cur.fetchall()
+
+    finally:
+        conn.close()
+
+
+def get_skills_by_location(location):
+    # Get skills by location
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    s.skill_name,
+                    COUNT(DISTINCT js.jobscope_job_id) AS job_count
+                FROM job_skills js
+                JOIN skills s
+                    ON js.skill_id = s.skill_id
+                JOIN jobs j
+                    ON js.jobscope_job_id = j.jobscope_job_id
+                JOIN locations l
+                    ON j.location_id = l.location_id
+                WHERE l.location_name ILIKE %s
+                GROUP BY s.skill_id, s.skill_name
+                ORDER BY job_count DESC;
+            """, (f"%{location}%",))
+
+            return cur.fetchall()
+
+    finally:
+        conn.close()
+
+
+def get_skill_combinations():
+    # Get skill combinations
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    s1.skill_name AS skill_1,
+                    s2.skill_name AS skill_2,
+                    COUNT(DISTINCT js1.jobscope_job_id) AS job_count
+                FROM job_skills js1
+                JOIN job_skills js2
+                    ON js1.jobscope_job_id = js2.jobscope_job_id
+                    AND js1.skill_id < js2.skill_id
+                JOIN skills s1
+                    ON js1.skill_id = s1.skill_id
+                JOIN skills s2
+                    ON js2.skill_id = s2.skill_id
+                GROUP BY
+                    s1.skill_id,
+                    s1.skill_name,
+                    s2.skill_id,
+                    s2.skill_name
+                ORDER BY job_count DESC;
+            """)
+
+            return cur.fetchall()
+
+    finally:
+        conn.close()
