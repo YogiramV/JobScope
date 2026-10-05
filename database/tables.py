@@ -91,6 +91,34 @@ def create_tables():
                 );
             """)
 
+            # Skills table
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS skills (
+                    skill_id BIGSERIAL PRIMARY KEY,
+                    skill_name VARCHAR(100) NOT NULL UNIQUE,
+                    normalized_name VARCHAR(150) NOT NULL UNIQUE,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
+            # Job-Skills relationship table
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS job_skills (
+                    jobscope_job_id VARCHAR(64) NOT NULL,
+                    skill_id BIGINT NOT NULL,
+
+                    PRIMARY KEY (jobscope_job_id, skill_id),
+
+                    FOREIGN KEY (jobscope_job_id)
+                        REFERENCES jobs(jobscope_job_id)
+                        ON DELETE CASCADE,
+
+                    FOREIGN KEY (skill_id)
+                        REFERENCES skills(skill_id)
+                        ON DELETE CASCADE
+                );
+            """)
+
             # Indexes
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS idx_jobs_company_id
@@ -127,6 +155,11 @@ def create_tables():
                 ON job_searches(jobscope_job_id);
             """)
 
+            cur.execute(""" 
+                CREATE INDEX IF NOT EXISTS idx_job_skills_skill_id
+                ON job_skills(skill_id);
+            """)
+
         conn.commit()
 
     except Exception:
@@ -161,6 +194,14 @@ def drop_tables():
 
             cur.execute("""
                 DROP TABLE IF EXISTS companies;
+            """)
+
+            cur.execute("""
+                DROP TABLE IF EXISTS job_skills;
+            """)
+
+            cur.execute("""
+                DROP TABLE IF EXISTS skills;
             """)
 
         conn.commit()
