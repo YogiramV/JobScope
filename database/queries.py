@@ -2,13 +2,49 @@ from connection import get_connection
 from psycopg2.extras import Json
 
 
+def get_existing_job_ids():
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT jobscope_job_id
+                FROM jobs;
+            """)
+
+            return {row[0] for row in cur.fetchall()}
+
+    finally:
+        conn.close()
+
+
+def update_last_seen(jobscope_job_id):
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE jobs
+                SET last_seen_at = CURRENT_TIMESTAMP
+                WHERE jobscope_job_id = %s;
+            """, (jobscope_job_id,))
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        raise
+
+    finally:
+        conn.close()
+
+
 def get_or_create_location(city, state, country):
     location_name = f"{city}, {state}"
     conn = get_connection()
 
     try:
         with conn.cursor() as cur:
-
             cur.execute("""
                 INSERT INTO locations (
                     city,
@@ -18,7 +54,8 @@ def get_or_create_location(city, state, country):
                 )
                 VALUES (%s, %s, %s, %s)
                 ON CONFLICT (city, state, country)
-                DO UPDATE SET location_name = EXCLUDED.location_name
+                DO UPDATE SET
+                    location_name = EXCLUDED.location_name
                 RETURNING location_id;
             """, (
                 city,
@@ -46,16 +83,16 @@ def get_or_create_company(company_name):
 
     try:
         with conn.cursor() as cur:
-
             cur.execute("""
-                    INSERT INTO companies (
-                        company_name
-                    )
-                    VALUES (%s)
-                    ON CONFLICT (company_name)
-                    DO UPDATE SET company_name = EXCLUDED.company_name
-                    RETURNING company_id;
-                """, (
+                INSERT INTO companies (
+                    company_name
+                )
+                VALUES (%s)
+                ON CONFLICT (company_name)
+                DO UPDATE SET
+                    company_name = EXCLUDED.company_name
+                RETURNING company_id;
+            """, (
                 company_name,
             ))
 
@@ -78,7 +115,6 @@ def get_or_create_search_configuration(role, location, country):
 
     try:
         with conn.cursor() as cur:
-
             cur.execute("""
                 INSERT INTO search_configurations (
                     role,
@@ -87,7 +123,8 @@ def get_or_create_search_configuration(role, location, country):
                 )
                 VALUES (%s, %s, %s)
                 ON CONFLICT (role, location, country)
-                DO UPDATE SET role = EXCLUDED.role
+                DO UPDATE SET
+                    role = EXCLUDED.role
                 RETURNING search_id;
             """, (
                 role,
@@ -114,13 +151,15 @@ def insert_or_update_job(job, company_id, location_id):
 
     try:
         with conn.cursor() as cur:
-
             cur.execute("""
                 INSERT INTO jobs (
                     jobscope_job_id,
-                    job_id, title,
-                    company_id, location_id,
-                    description, via,
+                    job_id,
+                    title,
+                    company_id,
+                    location_id,
+                    description,
+                    via,
                     source_link,
                     apply_options,
                     employment_type,
@@ -129,8 +168,11 @@ def insert_or_update_job(job, company_id, location_id):
                     first_seen_at,
                     last_seen_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s,
+                    CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP
                 )
                 ON CONFLICT (jobscope_job_id)
                 DO UPDATE SET
@@ -145,7 +187,7 @@ def insert_or_update_job(job, company_id, location_id):
                     annual_salary_min = EXCLUDED.annual_salary_min,
                     annual_salary_max = EXCLUDED.annual_salary_max,
                     last_seen_at = CURRENT_TIMESTAMP
-                RETURNING jobscope_job_id;
+                RETURNING jobscope_job_id, (xmax = 0) AS inserted;
             """, (
                 job["jobscope_job_id"],
                 job["job_id"],
@@ -161,11 +203,11 @@ def insert_or_update_job(job, company_id, location_id):
                 job["annual_salary_max"]
             ))
 
-            jobscope_job_id = cur.fetchone()[0]
+            jobscope_job_id, inserted = cur.fetchone()
 
         conn.commit()
 
-        return jobscope_job_id
+        return jobscope_job_id, inserted
 
     except Exception:
         conn.rollback()
@@ -180,17 +222,15 @@ def add_job_to_search(search_id, jobscope_job_id):
 
     try:
         with conn.cursor() as cur:
-
             cur.execute("""
-                    INSERT INTO job_searches (
-                        search_id,
-                        jobscope_job_id
-                    )
-                    VALUES (%s, %s)
-                    ON CONFLICT (search_id, jobscope_job_id)
-                    DO NOTHING
-                    RETURNING search_id, jobscope_job_id;
-                """, (
+                INSERT INTO job_searches (
+                    search_id,
+                    jobscope_job_id
+                )
+                VALUES (%s, %s)
+                ON CONFLICT (search_id, jobscope_job_id)
+                DO NOTHING;
+            """, (
                 search_id,
                 jobscope_job_id
             ))

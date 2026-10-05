@@ -1,12 +1,13 @@
-from pyspark.sql import SparkSession
 from queries import (
     get_or_create_company,
     get_or_create_location,
     get_or_create_search_configuration,
     insert_or_update_job,
-    add_job_to_search
+    add_job_to_search,
+    get_existing_job_ids,
+    update_last_seen
 )
-
+from pyspark.sql import SparkSession
 
 INDIAN_STATES = {
     "Andhra Pradesh",
@@ -71,6 +72,11 @@ def load_jobs(
         # Read processed jobs
         jobs_df = spark.read.parquet(processed_path)
 
+        # Get existing jobs from PostgreSQL
+        existing_job_ids = get_existing_job_ids()
+
+        print(f"Existing jobs in database: {len(existing_job_ids)}")
+
         # Get or create search configuration
         search_id = get_or_create_search_configuration(
             role=role,
@@ -78,10 +84,44 @@ def load_jobs(
             country=country
         )
 
-        # Process each job
+        # Separate new and existing jobs
+        new_jobs = []
+        existing_jobs = []
+
         for row in jobs_df.collect():
 
             job = row.asDict()
+
+            if job["jobscope_job_id"] in existing_job_ids:
+                existing_jobs.append(job)
+                print(f"Existing job: {job['jobscope_job_id']}")
+
+            else:
+                new_jobs.append(job)
+                print(f"New job: {job['jobscope_job_id']}")
+
+        print(f"New jobs: {len(new_jobs)}")
+        print(f"Existing jobs: {len(existing_jobs)}")
+
+        # Refresh existing jobs
+        for job in existing_jobs:
+
+            update_last_seen(
+                jobscope_job_id=job["jobscope_job_id"]
+            )
+
+            add_job_to_search(
+                search_id=search_id,
+                jobscope_job_id=job["jobscope_job_id"]
+            )
+
+            print(
+                f"Existing job refreshed: "
+                f"{job['jobscope_job_id']}"
+            )
+
+        # Insert new jobs
+        for job in new_jobs:
 
             # Get company
             company_id = get_or_create_company(
@@ -139,18 +179,17 @@ def load_jobs(
                 country=country
             )
 
-            print("\n--- JOB DATA ---")
-
-            for key, value in job.items():
-                if isinstance(value, str):
-                    print(f"{key}: {len(value)} characters")
-
-            # Insert or update job
-            jobscope_job_id = insert_or_update_job(
+            # Insert job
+            jobscope_job_id, inserted = insert_or_update_job(
                 job=job,
                 company_id=company_id,
                 location_id=location_id
             )
+
+            if inserted:
+                print(f"New job inserted: {jobscope_job_id}")
+            else:
+                print(f"Existing job updated: {jobscope_job_id}")
 
             # Link job to search
             add_job_to_search(
