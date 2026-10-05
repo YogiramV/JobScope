@@ -181,6 +181,14 @@ def drop_tables():
             """)
 
             cur.execute("""
+                DROP TABLE IF EXISTS job_skills;
+            """)
+
+            cur.execute("""
+                DROP TABLE IF EXISTS skills;
+            """)
+
+            cur.execute("""
                 DROP TABLE IF EXISTS jobs;
             """)
 
@@ -194,14 +202,6 @@ def drop_tables():
 
             cur.execute("""
                 DROP TABLE IF EXISTS companies;
-            """)
-
-            cur.execute("""
-                DROP TABLE IF EXISTS job_skills;
-            """)
-
-            cur.execute("""
-                DROP TABLE IF EXISTS skills;
             """)
 
         conn.commit()
