@@ -1,7 +1,7 @@
 import sys
 import logging
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 
 from airflow.sdk import DAG
 from airflow.providers.standard.operators.python import PythonOperator
@@ -29,64 +29,144 @@ sys.path.insert(0, DATABASE_PATH)
 # JobScope Imports
 # ============================================================
 
+from jobs_fetcher import get_jobs
 from jobs_processor import process_jobs
 from loader import load_jobs
 from skill_extractor import extract_all_job_skills
 
 
 # ============================================================
-# S3 Paths
+# Search Configuration
 # ============================================================
 
-RAW_DATA_PATH = (
-    "s3a://jobscope-data/"
-    "raw_data/2026-09-28/"
-    "data_engineer_coimbatore.json"
-)
-
-PROCESSED_DATA_PATH = (
-    "s3a://jobscope-data/"
-    "processed_data/airflow_test/"
-)
+ROLE = "Data Engineer"
+SEARCH_LOCATION = "Coimbatore"
+COUNTRY = "India"
 
 
 # ============================================================
-# Task Functions
+# Data Paths
+# ============================================================
+
+BUCKET_NAME = "jobscope-data"
+
+
+# ============================================================
+# Task 1 - Fetch Jobs
+# ============================================================
+
+def fetch_job_data():
+
+    logger.info(
+        "Starting job ingestion for role=%s, location=%s",
+        ROLE,
+        SEARCH_LOCATION
+    )
+
+    get_jobs(
+        ROLE,
+        SEARCH_LOCATION
+    )
+
+    logger.info("Job ingestion completed successfully.")
+
+
+# ============================================================
+# Task 2 - Process Jobs
 # ============================================================
 
 def process_job_data():
 
-    logger.info("Starting JobScope PySpark processing.")
+    today = str(date.today())
 
-    process_jobs(
-        RAW_DATA_PATH,
-        PROCESSED_DATA_PATH
+    filename = (
+        ROLE + "_" + SEARCH_LOCATION
+    ).lower().replace(" ", "_") + ".json"
+
+    raw_data_path = (
+        f"s3a://{BUCKET_NAME}/"
+        f"raw_data/{today}/"
+        f"{filename}"
     )
 
-    logger.info("JobScope PySpark processing completed successfully.")
+    processed_data_path = (
+        f"s3a://{BUCKET_NAME}/"
+        f"processed_data/{today}/"
+    )
 
+    logger.info(
+        "Starting PySpark processing."
+    )
+
+    logger.info(
+        "Raw data path: %s",
+        raw_data_path
+    )
+
+    logger.info(
+        "Processed data path: %s",
+        processed_data_path
+    )
+
+    process_jobs(
+        raw_data_path,
+        processed_data_path
+    )
+
+    logger.info(
+        "PySpark processing completed successfully."
+    )
+
+
+# ============================================================
+# Task 3 - Load Jobs
+# ============================================================
 
 def load_job_data():
 
-    logger.info("Starting PostgreSQL job loading.")
+    today = str(date.today())
 
-    load_jobs(
-        processed_path=PROCESSED_DATA_PATH,
-        role="Data Engineer",
-        search_location="Coimbatore",
-        country="India"
+    processed_data_path = (
+        f"s3a://{BUCKET_NAME}/"
+        f"processed_data/{today}/"
     )
 
-    logger.info("PostgreSQL job loading completed successfully.")
+    logger.info(
+        "Starting PostgreSQL job loading."
+    )
 
+    logger.info(
+        "Processed data path: %s",
+        processed_data_path
+    )
+
+    load_jobs(
+        processed_path=processed_data_path,
+        role=ROLE,
+        search_location=SEARCH_LOCATION,
+        country=COUNTRY
+    )
+
+    logger.info(
+        "PostgreSQL job loading completed successfully."
+    )
+
+
+# ============================================================
+# Task 4 - Extract Skills
+# ============================================================
 
 def extract_job_skills():
 
-    logger.info("Starting job skill extraction.")
+    logger.info(
+        "Starting job skill extraction."
+    )
 
     extract_all_job_skills()
 
-    logger.info("Job skill extraction completed successfully.")
+    logger.info(
+        "Job skill extraction completed successfully."
+    )
 
 
 # ============================================================
@@ -99,6 +179,17 @@ with DAG(
     schedule=None,
     catchup=False,
 ) as dag:
+
+    # --------------------------------------------------------
+    # Fetch Jobs
+    # --------------------------------------------------------
+
+    fetch_jobs_task = PythonOperator(
+        task_id="fetch_jobs",
+        python_callable=fetch_job_data,
+        retries=2,
+        retry_delay=timedelta(minutes=2),
+    )
 
     # --------------------------------------------------------
     # Process Jobs
@@ -137,4 +228,9 @@ with DAG(
     # Task Dependency
     # --------------------------------------------------------
 
-    process_jobs_task >> load_jobs_task >> extract_skills_task
+    (
+        fetch_jobs_task
+        >> process_jobs_task
+        >> load_jobs_task
+        >> extract_skills_task
+    )
