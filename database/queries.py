@@ -132,7 +132,7 @@ def insert_or_update_job(job, company_id, location_id):
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s,
                         %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )
-                ON CONFLICT (job_id)
+                ON CONFLICT (jobscope_job_id)
                 DO UPDATE SET
                     title = EXCLUDED.title,
                     company_id = EXCLUDED.company_id,
@@ -148,7 +148,8 @@ def insert_or_update_job(job, company_id, location_id):
                 RETURNING jobscope_job_id;
             """, (
                 job["jobscope_job_id"],
-                job["job_id"], job["title"],
+                job["job_id"],
+                job["title"],
                 company_id,
                 location_id,
                 job["description"],
@@ -157,7 +158,8 @@ def insert_or_update_job(job, company_id, location_id):
                 Json(job["apply_options"]),
                 job["employment_type"],
                 job["annual_salary_min"],
-                job["annual_salary_max"]))
+                job["annual_salary_max"]
+            ))
 
             jobscope_job_id = cur.fetchone()[0]
 
