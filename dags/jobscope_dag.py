@@ -144,7 +144,8 @@ def load_job_data():
         processed_path=processed_data_path,
         role=ROLE,
         search_location=SEARCH_LOCATION,
-        country=COUNTRY
+        country=COUNTRY,
+        observation_date=date.today()
     )
 
     logger.info(

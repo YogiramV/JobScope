@@ -1,3 +1,9 @@
+from pyspark.sql import SparkSession
+from data_quality import (
+    validate_jobs,
+    print_quality_report,
+    get_valid_jobs,
+)
 from pyspark.sql.functions import (
     col,
     concat_ws,
@@ -9,7 +15,6 @@ from pyspark.sql.functions import (
     trim,
     when,
 )
-from pyspark.sql import SparkSession
 
 # ============================================================
 # Configuration
@@ -38,357 +43,402 @@ def process_jobs(raw_data_path, processed_data_path):
         .getOrCreate()
     )
 
-    # ============================================================
-    # 2. Read Raw Job Data from S3
-    # ============================================================
+    try:
 
-    df = (
-        spark.read
-        .option("multiLine", True)
-        .json(raw_data_path)
-    )
+        # ========================================================
+        # 2. Read Raw Job Data from S3
+        # ========================================================
 
-    # ============================================================
-    # 3. Extract Individual Jobs
-    # ============================================================
-
-    jobs_df = df.select(
-        explode("jobs_results").alias("job")
-    )
-
-    # ============================================================
-    # 4. Select Required Fields
-    # ============================================================
-
-    jobs_df = jobs_df.select(
-        "job.job_id",
-        "job.title",
-        "job.company_name",
-        "job.location",
-        "job.description",
-        "job.via",
-        "job.source_link",
-        "job.extensions",
-        "job.apply_options",
-    )
-
-    # ============================================================
-    # 5. Basic Inspection
-    # ============================================================
-
-    print("Number of jobs:", jobs_df.count())
-
-    # ============================================================
-    # 6. Text Normalization
-    # ============================================================
-
-    text_columns = [
-        "title",
-        "company_name",
-        "location",
-        "description",
-        "via",
-    ]
-
-    for column_name in text_columns:
-        jobs_df = jobs_df.withColumn(
-            column_name,
-            trim(col(column_name)),
+        df = (
+            spark.read
+            .option("multiLine", True)
+            .json(raw_data_path)
         )
 
-    # ============================================================
-    # 7. Extract Employment Type
-    # ============================================================
+        # ========================================================
+        # 3. Extract Individual Jobs
+        # ========================================================
 
-    jobs_df = jobs_df.withColumn(
-        "employment_type",
-        expr("""
-            filter(
-                extensions,
-                x -> lower(x) LIKE '%full%'
-                    OR lower(x) LIKE '%part%'
-                    OR lower(x) LIKE '%contract%'
-                    OR lower(x) LIKE '%temporary%'
-                    OR lower(x) LIKE '%intern%'
-            )[0]
-        """),
-    )
+        jobs_df = df.select(
+            explode("jobs_results").alias("job")
+        )
 
-    jobs_df = jobs_df.withColumn(
-        "employment_type",
-        trim(col("employment_type")),
-    )
+        # ========================================================
+        # 4. Select Required Fields
+        # ========================================================
 
-    # ============================================================
-    # 8. Extract Salary
-    # ============================================================
+        jobs_df = jobs_df.select(
+            "job.job_id",
+            "job.title",
+            "job.company_name",
+            "job.location",
+            "job.description",
+            "job.via",
+            "job.source_link",
+            "job.extensions",
+            "job.apply_options",
+        )
 
-    jobs_df = jobs_df.withColumn(
-        "salary",
-        expr("""
-            get(
+        # ========================================================
+        # 5. Basic Inspection
+        # ========================================================
+
+        print("Number of jobs:", jobs_df.count())
+
+        # ========================================================
+        # 6. Text Normalization
+        # ========================================================
+
+        text_columns = [
+            "title",
+            "company_name",
+            "location",
+            "description",
+            "via",
+        ]
+
+        for column_name in text_columns:
+            jobs_df = jobs_df.withColumn(
+                column_name,
+                trim(col(column_name)),
+            )
+
+        # ========================================================
+        # 7. Extract Employment Type
+        # ========================================================
+
+        jobs_df = jobs_df.withColumn(
+            "employment_type",
+            expr("""
                 filter(
                     extensions,
-                    x -> x LIKE '%₹%'
-                ),
-                0
+                    x -> lower(x) LIKE '%full%'
+                        OR lower(x) LIKE '%part%'
+                        OR lower(x) LIKE '%contract%'
+                        OR lower(x) LIKE '%temporary%'
+                        OR lower(x) LIKE '%intern%'
+                )[0]
+            """),
+        )
+
+        jobs_df = jobs_df.withColumn(
+            "employment_type",
+            trim(col("employment_type")),
+        )
+
+        # ========================================================
+        # 8. Extract Salary
+        # ========================================================
+
+        jobs_df = jobs_df.withColumn(
+            "salary",
+            expr("""
+                get(
+                    filter(
+                        extensions,
+                        x -> x LIKE '%₹%'
+                    ),
+                    0
+                )
+            """),
+        )
+
+        # ========================================================
+        # 9. Determine Salary Period
+        # ========================================================
+
+        jobs_df = jobs_df.withColumn(
+            "salary_period",
+            when(
+                col("salary").contains("year"),
+                "year",
             )
-        """),
-    )
-
-    # ============================================================
-    # 9. Determine Salary Period
-    # ============================================================
-
-    jobs_df = jobs_df.withColumn(
-        "salary_period",
-        when(
-            col("salary").contains("year"),
-            "year",
+            .when(
+                col("salary").contains("month"),
+                "month",
+            )
+            .otherwise(None),
         )
-        .when(
-            col("salary").contains("month"),
-            "month",
-        )
-        .otherwise(None),
-    )
 
-    # ============================================================
-    # 10. Extract Salary Range
-    # ============================================================
+        # ========================================================
+        # 10. Extract Salary Range
+        # ========================================================
 
-    jobs_df = jobs_df.withColumn(
-        "salary_min",
-        regexp_replace(
-            split(col("salary"), "–")[0],
-            "₹",
-            "",
-        ),
-    )
-
-    jobs_df = jobs_df.withColumn(
-        "salary_max",
-        regexp_replace(
-            split(col("salary"), "–")[1],
-            "₹| a year| a month",
-            "",
-        ),
-    )
-
-    # ============================================================
-    # 11. Convert Salary to Numeric Values
-    # ============================================================
-
-    jobs_df = jobs_df.withColumn(
-        "salary_min_numeric",
-        when(
-            col("salary_min").endswith("K"),
+        jobs_df = jobs_df.withColumn(
+            "salary_min",
             regexp_replace(
-                col("salary_min"),
-                "K",
+                expr("get(split(salary, '–'), 0)"),
+                "₹",
                 "",
-            ).cast("double") * 1000,
-        )
-        .when(
-            col("salary_min").endswith("L"),
-            regexp_replace(
-                col("salary_min"),
-                "L",
-                "",
-            ).cast("double") * 100000,
-        )
-        .otherwise(None),
-    )
-
-    jobs_df = jobs_df.withColumn(
-        "salary_max_numeric",
-        when(
-            col("salary_max").endswith("K"),
-            regexp_replace(
-                col("salary_max"),
-                "K",
-                "",
-            ).cast("double") * 1000,
-        )
-        .when(
-            col("salary_max").endswith("L"),
-            regexp_replace(
-                col("salary_max"),
-                "L",
-                "",
-            ).cast("double") * 100000,
-        )
-        .otherwise(None),
-    )
-
-    # ============================================================
-    # 12. Calculate Annual Salary
-    # ============================================================
-
-    jobs_df = jobs_df.withColumn(
-        "annual_salary_min",
-        when(
-            col("salary_period") == "year",
-            col("salary_min_numeric"),
-        )
-        .when(
-            col("salary_period") == "month",
-            col("salary_min_numeric") * 12,
-        )
-        .otherwise(None),
-    )
-
-    jobs_df = jobs_df.withColumn(
-        "annual_salary_max",
-        when(
-            col("salary_period") == "year",
-            col("salary_max_numeric"),
-        )
-        .when(
-            col("salary_period") == "month",
-            col("salary_max_numeric") * 12,
-        )
-        .otherwise(None),
-    )
-
-    # ============================================================
-    # 13. Generate JobScope Job ID
-    # ============================================================
-
-    jobs_df = jobs_df.withColumn(
-        "jobscope_job_id",
-        sha2(
-            concat_ws(
-                "||",
-                col("title"),
-                col("company_name"),
-                col("location"),
             ),
-            256,
-        ),
-    )
+        )
 
-    # ============================================================
-    # 14. Data Quality Checks
-    # ============================================================
+        jobs_df = jobs_df.withColumn(
+            "salary_max",
+            regexp_replace(
+                expr("get(split(salary, '–'), 1)"),
+                "₹| a year| a month",
+                "",
+            ),
+        )
 
-    print("\nInvalid salary ranges:")
+        # ========================================================
+        # 11. Convert Salary to Numeric Values
+        # ========================================================
 
-    jobs_df.filter(
-        col("annual_salary_min") > col("annual_salary_max")
-    ).select(
-        "title",
-        "salary",
-        "annual_salary_min",
-        "annual_salary_max",
-    ).show(truncate=False)
+        jobs_df = jobs_df.withColumn(
+            "salary_min_numeric",
+            when(
+                col("salary_min").endswith("K"),
+                regexp_replace(
+                    col("salary_min"),
+                    "K",
+                    "",
+                ).cast("double") * 1000,
+            )
+            .when(
+                col("salary_min").endswith("L"),
+                regexp_replace(
+                    col("salary_min"),
+                    "L",
+                    "",
+                ).cast("double") * 100000,
+            )
+            .otherwise(None),
+        )
 
-    print("\nJobs with missing required fields:")
+        jobs_df = jobs_df.withColumn(
+            "salary_max_numeric",
+            when(
+                col("salary_max").endswith("K"),
+                regexp_replace(
+                    col("salary_max"),
+                    "K",
+                    "",
+                ).cast("double") * 1000,
+            )
+            .when(
+                col("salary_max").endswith("L"),
+                regexp_replace(
+                    col("salary_max"),
+                    "L",
+                    "",
+                ).cast("double") * 100000,
+            )
+            .otherwise(None),
+        )
 
-    jobs_df.filter(
-        col("job_id").isNull()
-        | col("title").isNull()
-        | col("company_name").isNull()
-        | col("location").isNull()
-        | col("description").isNull()
-    ).select(
-        "job_id",
-        "title",
-        "company_name",
-        "location",
-    ).show(truncate=False)
+        # ========================================================
+        # 12. Calculate Annual Salary
+        # ========================================================
 
-    print("\nDuplicate SerpApi job IDs:")
+        jobs_df = jobs_df.withColumn(
+            "annual_salary_min",
+            when(
+                col("salary_period") == "year",
+                col("salary_min_numeric"),
+            )
+            .when(
+                col("salary_period") == "month",
+                col("salary_min_numeric") * 12,
+            )
+            .otherwise(None),
+        )
 
-    jobs_df.groupBy("job_id") \
-        .count() \
-        .filter(col("count") > 1) \
-        .show(truncate=False)
+        jobs_df = jobs_df.withColumn(
+            "annual_salary_max",
+            when(
+                col("salary_period") == "year",
+                col("salary_max_numeric"),
+            )
+            .when(
+                col("salary_period") == "month",
+                col("salary_max_numeric") * 12,
+            )
+            .otherwise(None),
+        )
 
-    print("\nDuplicate JobScope IDs:")
+        # ========================================================
+        # 13. Generate JobScope Job ID
+        # ========================================================
 
-    jobs_df.groupBy("jobscope_job_id") \
-        .count() \
-        .filter(col("count") > 1) \
-        .show(truncate=False)
+        jobs_df = jobs_df.withColumn(
+            "jobscope_job_id",
+            sha2(
+                concat_ws(
+                    "||",
+                    col("title"),
+                    col("company_name"),
+                    col("location"),
+                ),
+                256,
+            ),
+        )
 
-    print("\nMissing JobScope IDs:")
+        # ========================================================
+        # 14. Existing Data Quality Checks
+        # ========================================================
 
-    print(
+        print("\nInvalid salary ranges:")
+
         jobs_df.filter(
-            col("jobscope_job_id").isNull()
-        ).count()
-    )
+            col("annual_salary_min") > col("annual_salary_max")
+        ).select(
+            "title",
+            "salary",
+            "annual_salary_min",
+            "annual_salary_max",
+        ).show(truncate=False)
 
-    # ============================================================
-    # 15. Final Inspection
-    # ============================================================
+        print("\nJobs with missing required fields:")
 
-    jobs_df.select(
-        "jobscope_job_id",
-        "job_id",
-        "title",
-        "company_name",
-        "location",
-        "employment_type",
-        "salary",
-        "salary_period",
-        "salary_min_numeric",
-        "salary_max_numeric",
-        "annual_salary_min",
-        "annual_salary_max",
-    ).show(
-        20,
-        truncate=False,
-    )
+        jobs_df.filter(
+            col("job_id").isNull()
+            | col("title").isNull()
+            | col("company_name").isNull()
+            | col("location").isNull()
+            | col("description").isNull()
+        ).select(
+            "job_id",
+            "title",
+            "company_name",
+            "location",
+        ).show(truncate=False)
 
-    # ============================================================
-    # 16. Create Processed Dataset
-    # ============================================================
+        print("\nDuplicate SerpApi job IDs:")
 
-    processed_jobs_df = jobs_df.select(
-        "jobscope_job_id",
-        "job_id",
-        "title",
-        "company_name",
-        "location",
-        "description",
-        "via",
-        "source_link",
-        "apply_options",
-        "employment_type",
-        "annual_salary_min",
-        "annual_salary_max",
-    )
+        (
+            jobs_df.groupBy("job_id")
+            .count()
+            .filter(col("count") > 1)
+            .show(truncate=False)
+        )
 
-    # ============================================================
-    # 17. Validate Processed Dataset
-    # ============================================================
+        print("\nDuplicate JobScope IDs:")
 
-    print("Original jobs:", jobs_df.count())
-    print("Processed jobs:", processed_jobs_df.count())
+        (
+            jobs_df.groupBy("jobscope_job_id")
+            .count()
+            .filter(col("count") > 1)
+            .show(truncate=False)
+        )
 
-    processed_jobs_df.printSchema()
+        print("\nMissing JobScope IDs:")
 
-    # ============================================================
-    # 18. Write Processed Data to S3
-    # ============================================================
+        print(
+            jobs_df.filter(
+                col("jobscope_job_id").isNull()
+            ).count()
+        )
 
-    processed_jobs_df.write \
-        .mode("overwrite") \
-        .parquet(processed_data_path)
+        # ========================================================
+        # 15. Data Quality Validation
+        # ========================================================
 
-    # ============================================================
-    # 19. Stop Spark Session
-    # ============================================================
+        jobs_df = validate_jobs(jobs_df)
 
-    spark.stop()
+        print_quality_report(jobs_df)
+
+        valid_jobs_df = get_valid_jobs(jobs_df)
+
+        rejected_jobs_df = jobs_df.filter(
+            col("quality_status") == "rejected"
+        )
+
+        # ========================================================
+        # Write Rejected Data to S3
+        # ========================================================
+
+        rejected_data_path = (
+            processed_data_path
+            .replace(
+                "processed_data/",
+                "rejected_data/"
+            )
+        )
+
+        if rejected_jobs_df.count() > 0:
+
+            rejected_jobs_df.write \
+                .mode("overwrite") \
+                .parquet(rejected_data_path)
+
+            print(
+                f"Rejected data written to: "
+                f"{rejected_data_path}"
+            )
+
+        else:
+
+            print("No rejected jobs to write.")
+
+        # ========================================================
+        # 16. Data Quality Summary
+        # ========================================================
+
+        print("\n--- DATA QUALITY SUMMARY ---")
+        print("Original jobs:", jobs_df.count())
+        print("Valid jobs:", valid_jobs_df.count())
+        print("Rejected jobs:", rejected_jobs_df.count())
+
+        # ========================================================
+        # 17. Create Processed Dataset
+        # ========================================================
+
+        processed_jobs_df = valid_jobs_df.select(
+            "jobscope_job_id",
+            "job_id",
+            "title",
+            "company_name",
+            "location",
+            "description",
+            "via",
+            "source_link",
+            "apply_options",
+            "employment_type",
+            "annual_salary_min",
+            "annual_salary_max",
+        )
+
+        # ========================================================
+        # 18. Validate Processed Dataset
+        # ========================================================
+
+        processed_jobs_df.printSchema()
+
+        processed_jobs_df.show(
+            20,
+            truncate=False,
+        )
+
+        # ========================================================
+        # 19. Write Processed Data to S3
+        # ========================================================
+
+        processed_jobs_df.write \
+            .mode("overwrite") \
+            .parquet(processed_data_path)
+
+        print(
+            f"Processed data written to: "
+            f"{processed_data_path}"
+        )
+
+    finally:
+
+        # ========================================================
+        # 20. Stop Spark Session
+        # ========================================================
+
+        spark.stop()
 
 
 if __name__ == "__main__":
+
     process_jobs(
         f"s3a://{BUCKET_NAME}/"
         "raw_data/2026-09-24/data_engineer_coimbatore.json",
+
         f"s3a://{BUCKET_NAME}/"
         "processed_data/2026-09-28/",
     )
