@@ -3,7 +3,7 @@ import pandas as pd
 from connection import get_connection
 
 
-INPUT_FILE = "../jobscope_skill_dictionary_normalized.csv"
+INPUT_FILE = "../resources/jobscope_skill_dictionary_normalized.csv"
 
 
 def load_skills():
