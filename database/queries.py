@@ -18,16 +18,22 @@ def get_existing_job_ids():
         conn.close()
 
 
-def update_last_seen(jobscope_job_id):
+def update_last_seen(jobscope_job_id, observation_date):
     conn = get_connection()
 
     try:
         with conn.cursor() as cur:
             cur.execute("""
                 UPDATE jobs
-                SET last_seen_at = CURRENT_TIMESTAMP
+                SET last_seen_at = GREATEST(
+                    last_seen_at,
+                    %s
+                )
                 WHERE jobscope_job_id = %s;
-            """, (jobscope_job_id,))
+            """, (
+                observation_date,
+                jobscope_job_id
+            ))
 
         conn.commit()
 
@@ -146,7 +152,12 @@ def get_or_create_search_configuration(role, location, country):
         conn.close()
 
 
-def insert_or_update_job(job, company_id, location_id):
+def insert_or_update_job(
+    job,
+    company_id,
+    location_id,
+    observation_date
+):
     conn = get_connection()
 
     try:
@@ -170,9 +181,7 @@ def insert_or_update_job(job, company_id, location_id):
                 )
                 VALUES (
                     %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s,
-                    CURRENT_TIMESTAMP,
-                    CURRENT_TIMESTAMP
+                    %s, %s, %s, %s, %s, %s
                 )
                 ON CONFLICT (jobscope_job_id)
                 DO UPDATE SET
@@ -186,7 +195,10 @@ def insert_or_update_job(job, company_id, location_id):
                     employment_type = EXCLUDED.employment_type,
                     annual_salary_min = EXCLUDED.annual_salary_min,
                     annual_salary_max = EXCLUDED.annual_salary_max,
-                    last_seen_at = CURRENT_TIMESTAMP
+                    last_seen_at = GREATEST(
+                        jobs.last_seen_at,
+                        EXCLUDED.last_seen_at
+                    )
                 RETURNING jobscope_job_id, (xmax = 0) AS inserted;
             """, (
                 job["jobscope_job_id"],
@@ -200,7 +212,9 @@ def insert_or_update_job(job, company_id, location_id):
                 Json(job["apply_options"]),
                 job["employment_type"],
                 job["annual_salary_min"],
-                job["annual_salary_max"]
+                job["annual_salary_max"],
+                observation_date,
+                observation_date
             ))
 
             jobscope_job_id, inserted = cur.fetchone()

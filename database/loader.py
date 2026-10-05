@@ -53,7 +53,8 @@ def load_jobs(
     processed_path,
     role,
     search_location,
-    country
+    country,
+    observation_date
 ):
 
     spark = SparkSession.builder \
@@ -107,7 +108,7 @@ def load_jobs(
         for job in existing_jobs:
 
             update_last_seen(
-                jobscope_job_id=job["jobscope_job_id"]
+                jobscope_job_id=job["jobscope_job_id"], observation_date=observation_date
             )
 
             add_job_to_search(
@@ -183,7 +184,8 @@ def load_jobs(
             jobscope_job_id, inserted = insert_or_update_job(
                 job=job,
                 company_id=company_id,
-                location_id=location_id
+                location_id=location_id,
+                observation_date=observation_date
             )
 
             if inserted:
@@ -204,10 +206,11 @@ def load_jobs(
 if __name__ == "__main__":
 
     load_jobs(
-        processed_path="s3a://jobscope-data/processed_data/2026-09-28/",
+        processed_path="s3a://jobscope-data/processed_data/2026-10-05/",
         role="Data Engineer",
         search_location="Coimbatore",
-        country="India"
+        country="India",
+        observation_date="2026-10-05"
     )
 
     print("Jobs loaded successfully!")
