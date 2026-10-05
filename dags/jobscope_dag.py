@@ -31,7 +31,7 @@ sys.path.insert(0, DATABASE_PATH)
 
 from jobs_fetcher import get_jobs
 from jobs_processor import process_jobs
-from loader import load_jobs
+from database.loader import load_jobs
 from skill_extractor import extract_all_job_skills
 
 
