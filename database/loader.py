@@ -130,18 +130,23 @@ def load_jobs(
             )
 
             # Parse location
+            raw_location = (job["location"] or "").strip()
+
             location_parts = [
                 part.strip()
-                for part in job["location"].split(",")
+                for part in raw_location.split(",")
                 if part.strip()
             ]
 
+            city = None
+            state = None
+            location_name = raw_location
+
             if len(location_parts) >= 2:
 
-                # Example:
-                # Coimbatore, Tamil Nadu
                 city = location_parts[0]
                 state = location_parts[1]
+                location_name = ", ".join(location_parts)
 
             elif len(location_parts) == 1:
 
@@ -150,8 +155,7 @@ def load_jobs(
                 # Example:
                 # India
                 if location.lower() == country.lower():
-                    city = None
-                    state = None
+                    location_name = country
 
                 # Example:
                 # Tamil Nadu
@@ -159,25 +163,30 @@ def load_jobs(
                     location.lower() == state_name.lower()
                     for state_name in INDIAN_STATES
                 ):
-                    city = None
                     state = location
+                    location_name = location
+
+                # Example:
+                # Anywhere
+                elif location.lower() == "anywhere":
+                    location_name = location
 
                 # Example:
                 # Coimbatore
                 else:
                     city = location
-                    state = None
+                    location_name = location
 
             else:
 
-                city = None
-                state = None
+                location_name = "Unknown"
 
             # Get location
             location_id = get_or_create_location(
                 city=city,
                 state=state,
-                country=country
+                country=country,
+                location_name=location_name
             )
 
             # Insert job

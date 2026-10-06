@@ -45,8 +45,7 @@ def update_last_seen(jobscope_job_id, observation_date):
         conn.close()
 
 
-def get_or_create_location(city, state, country):
-    location_name = f"{city}, {state}"
+def get_or_create_location(city, state, country, location_name):
     conn = get_connection()
 
     try:
@@ -73,7 +72,6 @@ def get_or_create_location(city, state, country):
             location_id = cur.fetchone()[0]
 
         conn.commit()
-
         return location_id
 
     except Exception:
