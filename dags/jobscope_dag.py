@@ -1,10 +1,9 @@
-import sys
-import logging
-
-from datetime import datetime, timedelta, date
-
-from airflow.sdk import DAG
 from airflow.providers.standard.operators.python import PythonOperator
+from airflow.sdk import DAG
+from datetime import datetime, timedelta, date
+import logging
+import sys
+import os
 
 
 # ============================================================
@@ -18,8 +17,15 @@ logger = logging.getLogger(__name__)
 # JobScope Project Paths
 # ============================================================
 
-JOB_SCOPE_PATH = "/home/yogi/workspace/DataScience/Projects/JobScope"
-DATABASE_PATH = "/home/yogi/workspace/DataScience/Projects/JobScope/database"
+JOB_SCOPE_PATH = os.getenv(
+    "JOB_SCOPE_PATH",
+    "/home/yogi/workspace/DataScience/Projects/JobScope"
+)
+
+DATABASE_PATH = os.path.join(
+    JOB_SCOPE_PATH,
+    "database"
+)
 
 sys.path.insert(0, JOB_SCOPE_PATH)
 sys.path.insert(0, DATABASE_PATH)
@@ -40,8 +46,10 @@ from skill_extractor import extract_all_job_skills
 # Data Paths
 # ============================================================
 
-BUCKET_NAME = "jobscope-data"
-
+BUCKET_NAME = os.getenv(
+    "JOB_SCOPE_S3_BUCKET",
+    "jobscope-data"
+)
 
 # ============================================================
 # Task 1 - Fetch Jobs
