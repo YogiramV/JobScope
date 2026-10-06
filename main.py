@@ -14,7 +14,11 @@ from database.analytics import (
     get_skill_combinations,
     get_salary_by_role,
     get_salary_by_location,
+    get_search_configurations,
+    add_search_configuration,
+    set_search_configuration_status,
 )
+
 import streamlit as st
 import pandas as pd
 
@@ -151,13 +155,14 @@ else:
 # Tabs
 # ============================================================
 
-overview, job_market, skills, salary, job_explorer = st.tabs(
+overview, job_market, skills, salary, job_explorer, search_config = st.tabs(
     [
         "Overview",
         "Job Market",
         "Skills",
         "Salary",
         "Job Explorer",
+        "Search Configuration",
     ]
 )
 
@@ -809,4 +814,143 @@ with job_explorer:
     else:
         st.info(
             "No jobs are currently available."
+        )
+
+with search_config:
+    st.markdown(
+        '<div class="section-title">Search Configuration</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.write(
+        "Manage the job searches used by the JobScope pipeline."
+    )
+
+    # ========================================================
+    # Add Search Configuration
+    # ========================================================
+
+    with st.form("search_configuration_form"):
+
+        col1, col2, col3 = st.columns(3)
+
+        role = col1.text_input(
+            "Job Role",
+            placeholder="e.g. Data Engineer",
+        )
+
+        location = col2.text_input(
+            "Location",
+            placeholder="e.g. Chennai",
+        )
+
+        country = col3.text_input(
+            "Country",
+            placeholder="e.g. India",
+        )
+
+        submitted = st.form_submit_button(
+            "Add Search",
+            use_container_width=True,
+        )
+
+        if submitted:
+
+            role = role.strip()
+            location = location.strip()
+            country = country.strip()
+
+            if not role or not location or not country:
+
+                st.warning(
+                    "Please enter a role, location, and country."
+                )
+
+            else:
+
+                try:
+                    search_id = add_search_configuration(
+                        role,
+                        location,
+                        country,
+                    )
+
+                    st.success(
+                        f"Search configuration added "
+                        f"(ID: {search_id})."
+                    )
+
+                    st.rerun()
+
+                except Exception as e:
+
+                    st.error(
+                        f"Unable to add search configuration: {e}"
+                    )
+
+    st.divider()
+
+    # ========================================================
+    # Existing Search Configurations
+    # ========================================================
+
+    st.markdown("#### Configured Searches")
+
+    search_configurations = get_search_configurations()
+
+    if search_configurations:
+
+        for (
+            search_id,
+            role,
+            location,
+            country,
+            is_active,
+            created_at,
+        ) in search_configurations:
+
+            col1, col2, col3, col4, col5 = st.columns(
+                [2.5, 2, 1.5, 1.5, 1]
+            )
+
+            col1.write(role)
+            col2.write(location)
+            col3.write(country)
+
+            status = "Active" if is_active else "Inactive"
+
+            col4.write(status)
+
+            new_status = col5.toggle(
+                "Active",
+                value=is_active,
+                key=f"search_status_{search_id}",
+                label_visibility="collapsed",
+            )
+
+            if new_status != is_active:
+
+                try:
+
+                    set_search_configuration_status(
+                        search_id,
+                        new_status,
+                    )
+
+                    st.rerun()
+
+                except Exception as e:
+
+                    st.error(
+                        f"Unable to update search status: {e}"
+                    )
+
+            st.caption(
+                f"Created: {created_at}"
+            )
+
+    else:
+
+        st.info(
+            "No search configurations have been added yet."
         )

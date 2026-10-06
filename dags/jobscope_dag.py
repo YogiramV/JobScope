@@ -32,16 +32,8 @@ sys.path.insert(0, DATABASE_PATH)
 from jobs_fetcher import get_jobs
 from jobs_processor import process_jobs
 from database.loader import load_jobs
+from database.analytics import get_active_search_configurations
 from skill_extractor import extract_all_job_skills
-
-
-# ============================================================
-# Search Configuration
-# ============================================================
-
-ROLE = "Data Engineer"
-SEARCH_LOCATION = "Coimbatore"
-COUNTRY = "India"
 
 
 # ============================================================
@@ -57,18 +49,42 @@ BUCKET_NAME = "jobscope-data"
 
 def fetch_job_data():
 
+    configurations = get_active_search_configurations()
+
+    if not configurations:
+        logger.warning(
+            "No active search configurations found."
+        )
+        return
+
     logger.info(
-        "Starting job ingestion for role=%s, location=%s",
-        ROLE,
-        SEARCH_LOCATION
+        "Found %d active search configuration(s).",
+        len(configurations)
     )
 
-    get_jobs(
-        ROLE,
-        SEARCH_LOCATION
-    )
+    for search_id, role, location, country in configurations:
 
-    logger.info("Job ingestion completed successfully.")
+        logger.info(
+            "Starting job ingestion: "
+            "search_id=%s, role=%s, location=%s, country=%s",
+            search_id,
+            role,
+            location,
+            country
+        )
+
+        get_jobs(
+            role,
+            location
+        )
+
+        logger.info(
+            "Job ingestion completed: "
+            "search_id=%s, role=%s, location=%s",
+            search_id,
+            role,
+            location
+        )
 
 
 # ============================================================
@@ -79,43 +95,62 @@ def process_job_data():
 
     today = str(date.today())
 
-    filename = (
-        ROLE + "_" + SEARCH_LOCATION
-    ).lower().replace(" ", "_") + ".json"
+    configurations = get_active_search_configurations()
 
-    raw_data_path = (
-        f"s3a://{BUCKET_NAME}/"
-        f"raw_data/{today}/"
-        f"{filename}"
-    )
+    if not configurations:
+        logger.warning(
+            "No active search configurations found."
+        )
+        return
 
-    processed_data_path = (
-        f"s3a://{BUCKET_NAME}/"
-        f"processed_data/{today}/"
-    )
+    for search_id, role, location, country in configurations:
 
-    logger.info(
-        "Starting PySpark processing."
-    )
+        filename = (
+            role + "_" + location
+        ).lower().replace(" ", "_") + ".json"
 
-    logger.info(
-        "Raw data path: %s",
-        raw_data_path
-    )
+        raw_data_path = (
+            f"s3a://{BUCKET_NAME}/"
+            f"raw_data/{today}/"
+            f"{filename}"
+        )
 
-    logger.info(
-        "Processed data path: %s",
-        processed_data_path
-    )
+        processed_data_path = (
+            f"s3a://{BUCKET_NAME}/"
+            f"processed_data/{today}/"
+            f"{role}_{location}".lower().replace(" ", "_") + "/"
+        )
 
-    process_jobs(
-        raw_data_path,
-        processed_data_path
-    )
+        logger.info(
+            "Starting PySpark processing: "
+            "search_id=%s, role=%s, location=%s",
+            search_id,
+            role,
+            location
+        )
 
-    logger.info(
-        "PySpark processing completed successfully."
-    )
+        logger.info(
+            "Raw data path: %s",
+            raw_data_path
+        )
+
+        logger.info(
+            "Processed data path: %s",
+            processed_data_path
+        )
+
+        process_jobs(
+            raw_data_path,
+            processed_data_path
+        )
+
+        logger.info(
+            "PySpark processing completed: "
+            "search_id=%s, role=%s, location=%s",
+            search_id,
+            role,
+            location
+        )
 
 
 # ============================================================
@@ -126,31 +161,50 @@ def load_job_data():
 
     today = str(date.today())
 
-    processed_data_path = (
-        f"s3a://{BUCKET_NAME}/"
-        f"processed_data/{today}/"
-    )
+    configurations = get_active_search_configurations()
 
-    logger.info(
-        "Starting PostgreSQL job loading."
-    )
+    if not configurations:
+        logger.warning(
+            "No active search configurations found."
+        )
+        return
 
-    logger.info(
-        "Processed data path: %s",
-        processed_data_path
-    )
+    for search_id, role, location, country in configurations:
 
-    load_jobs(
-        processed_path=processed_data_path,
-        role=ROLE,
-        search_location=SEARCH_LOCATION,
-        country=COUNTRY,
-        observation_date=date.today()
-    )
+        processed_data_path = (
+            f"s3a://{BUCKET_NAME}/"
+            f"processed_data/{today}/"
+            f"{role}_{location}".lower().replace(" ", "_") + "/"
+        )
 
-    logger.info(
-        "PostgreSQL job loading completed successfully."
-    )
+        logger.info(
+            "Starting PostgreSQL job loading: "
+            "search_id=%s, role=%s, location=%s",
+            search_id,
+            role,
+            location
+        )
+
+        logger.info(
+            "Processed data path: %s",
+            processed_data_path
+        )
+
+        load_jobs(
+            processed_path=processed_data_path,
+            role=role,
+            search_location=location,
+            country=country,
+            observation_date=date.today()
+        )
+
+        logger.info(
+            "PostgreSQL job loading completed: "
+            "search_id=%s, role=%s, location=%s",
+            search_id,
+            role,
+            location
+        )
 
 
 # ============================================================

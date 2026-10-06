@@ -467,3 +467,112 @@ def get_skill_combinations():
 
     finally:
         conn.close()
+
+# ============================================================
+# Search Configuration
+# ============================================================
+
+
+def get_search_configurations():
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    search_id,
+                    role,
+                    location,
+                    country,
+                    is_active,
+                    created_at
+                FROM search_configurations
+                ORDER BY created_at DESC;
+            """)
+
+            return cur.fetchall()
+
+    finally:
+        conn.close()
+
+
+def add_search_configuration(role, location, country):
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO search_configurations (
+                    role,
+                    location,
+                    country
+                )
+                VALUES (%s, %s, %s)
+                ON CONFLICT (role, location, country)
+                DO UPDATE SET
+                    is_active = TRUE
+                RETURNING search_id;
+            """, (
+                role,
+                location,
+                country
+            ))
+
+            search_id = cur.fetchone()[0]
+
+        conn.commit()
+
+        return search_id
+
+    except Exception:
+        conn.rollback()
+        raise
+
+    finally:
+        conn.close()
+
+
+def set_search_configuration_status(search_id, is_active):
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE search_configurations
+                SET is_active = %s
+                WHERE search_id = %s;
+            """, (
+                is_active,
+                search_id
+            ))
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        raise
+
+    finally:
+        conn.close()
+
+
+def get_active_search_configurations():
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    search_id,
+                    role,
+                    location,
+                    country
+                FROM search_configurations
+                WHERE is_active = TRUE
+                ORDER BY search_id;
+            """)
+
+            return cur.fetchall()
+
+    finally:
+        conn.close()
