@@ -110,20 +110,43 @@ def process_jobs(raw_data_path, processed_data_path):
         jobs_df = jobs_df.withColumn(
             "employment_type",
             expr("""
-                filter(
-                    extensions,
-                    x -> lower(x) LIKE '%full%'
-                        OR lower(x) LIKE '%part%'
-                        OR lower(x) LIKE '%contract%'
-                        OR lower(x) LIKE '%temporary%'
-                        OR lower(x) LIKE '%intern%'
-                )[0]
+                get(
+                    filter(
+                        extensions,
+                        x -> lower(x) LIKE '%full%'
+                            OR lower(x) LIKE '%part%'
+                            OR lower(x) LIKE '%contract%'
+                            OR lower(x) LIKE '%temporary%'
+                            OR lower(x) LIKE '%intern%'
+                    ),
+                    0
+                )
             """),
         )
 
         jobs_df = jobs_df.withColumn(
             "employment_type",
-            trim(col("employment_type")),
+            when(
+                col("employment_type").contains("Full"),
+                "full-time",
+            )
+            .when(
+                col("employment_type").contains("Part"),
+                "part-time",
+            )
+            .when(
+                col("employment_type").contains("Contract"),
+                "contract",
+            )
+            .when(
+                col("employment_type").contains("Temporary"),
+                "temporary",
+            )
+            .when(
+                col("employment_type").contains("Intern"),
+                "internship",
+            )
+            .otherwise(None),
         )
 
         # ========================================================

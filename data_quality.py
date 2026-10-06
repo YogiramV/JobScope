@@ -157,10 +157,105 @@ def validate_duplicates(jobs_df):
 
     return jobs_df
 
+# ============================================================
+# 3. Validate Salary
+# ============================================================
+
+
+def validate_salary(jobs_df):
+
+    invalid_salary_condition = (
+        (
+            col("annual_salary_min").isNotNull()
+            & col("annual_salary_max").isNotNull()
+            & (
+                col("annual_salary_min")
+                > col("annual_salary_max")
+            )
+        )
+        |
+        (
+            col("annual_salary_min").isNotNull()
+            & (col("annual_salary_min") < 0)
+        )
+        |
+        (
+            col("annual_salary_max").isNotNull()
+            & (col("annual_salary_max") < 0)
+        )
+    )
+
+    jobs_df = jobs_df.withColumn(
+        "quality_reason",
+        when(
+            invalid_salary_condition,
+            lit("invalid salary range")
+        ).otherwise(
+            col("quality_reason")
+        )
+    )
+
+    jobs_df = jobs_df.withColumn(
+        "quality_status",
+        when(
+            col("quality_reason").isNotNull(),
+            lit("rejected")
+        ).otherwise(
+            col("quality_status")
+        )
+    )
+
+    return jobs_df
 
 # ============================================================
-# 3. Run All Data Quality Checks
+# 4. Validate Employment Type
 # ============================================================
+
+
+VALID_EMPLOYMENT_TYPES = [
+    "full-time",
+    "part-time",
+    "contract",
+    "temporary",
+    "internship",
+]
+
+
+def validate_employment_type(jobs_df):
+
+    invalid_employment_condition = (
+        col("employment_type").isNotNull()
+        & ~col("employment_type").isin(
+            VALID_EMPLOYMENT_TYPES
+        )
+    )
+
+    jobs_df = jobs_df.withColumn(
+        "quality_reason",
+        when(
+            invalid_employment_condition,
+            lit("invalid employment type")
+        ).otherwise(
+            col("quality_reason")
+        )
+    )
+
+    jobs_df = jobs_df.withColumn(
+        "quality_status",
+        when(
+            col("quality_reason").isNotNull(),
+            lit("rejected")
+        ).otherwise(
+            col("quality_status")
+        )
+    )
+
+    return jobs_df
+
+# ============================================================
+# 5. Run All Data Quality Checks
+# ============================================================
+
 
 def validate_jobs(jobs_df):
 
@@ -168,11 +263,15 @@ def validate_jobs(jobs_df):
 
     jobs_df = validate_duplicates(jobs_df)
 
+    jobs_df = validate_salary(jobs_df)
+
+    jobs_df = validate_employment_type(jobs_df)
+
     return jobs_df
 
 
 # ============================================================
-# 4. Print Quality Report
+# 6. Print Quality Report
 # ============================================================
 
 def print_quality_report(jobs_df):
@@ -212,7 +311,7 @@ def print_quality_report(jobs_df):
 
 
 # ============================================================
-# 5. Get Valid Jobs
+# 7. Get Valid Jobs
 # ============================================================
 
 def get_valid_jobs(jobs_df):
@@ -223,7 +322,7 @@ def get_valid_jobs(jobs_df):
 
 
 # ============================================================
-# 6. Get Rejected Jobs
+# 8. Get Rejected Jobs
 # ============================================================
 
 def get_rejected_jobs(jobs_df):
