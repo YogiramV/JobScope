@@ -16,6 +16,7 @@ from database.analytics import (
     get_salary_by_location,
 )
 import streamlit as st
+import pandas as pd
 
 # ============================================================
 # Page Configuration
@@ -535,17 +536,25 @@ with salary:
                 ],
             )
 
-            salary_role_df[
-                "Average Minimum Salary"
-            ] = salary_role_df[
-                "Average Minimum Salary"
-            ].round(0)
+            salary_role_df["Average Minimum Salary"] = pd.to_numeric(
+                salary_role_df["Average Minimum Salary"],
+                errors="coerce"
+            ).round(0)
 
-            salary_role_df[
-                "Average Maximum Salary"
-            ] = salary_role_df[
-                "Average Maximum Salary"
-            ].round(0)
+            salary_role_df["Average Maximum Salary"] = pd.to_numeric(
+                salary_role_df["Average Maximum Salary"],
+                errors="coerce"
+            ).round(0)
+
+            salary_role_df["Average Minimum Salary"] = (
+                salary_role_df["Average Minimum Salary"]
+                .apply(lambda x: f"₹{x:,.0f}" if pd.notna(x) else "N/A")
+            )
+
+            salary_role_df["Average Maximum Salary"] = (
+                salary_role_df["Average Maximum Salary"]
+                .apply(lambda x: f"₹{x:,.0f}" if pd.notna(x) else "N/A")
+            )
 
             st.dataframe(
                 salary_role_df,
@@ -582,17 +591,25 @@ with salary:
             ],
         )
 
-        salary_location_df[
-            "Average Minimum Salary"
-        ] = salary_location_df[
-            "Average Minimum Salary"
-        ].round(0)
+        salary_location_df["Average Minimum Salary"] = pd.to_numeric(
+            salary_location_df["Average Minimum Salary"],
+            errors="coerce"
+        ).round(0)
 
-        salary_location_df[
-            "Average Maximum Salary"
-        ] = salary_location_df[
-            "Average Maximum Salary"
-        ].round(0)
+        salary_location_df["Average Maximum Salary"] = pd.to_numeric(
+            salary_location_df["Average Maximum Salary"],
+            errors="coerce"
+        ).round(0)
+
+        salary_location_df["Average Minimum Salary"] = (
+            salary_location_df["Average Minimum Salary"]
+            .apply(lambda x: f"₹{x:,.0f}" if pd.notna(x) else "N/A")
+        )
+
+        salary_location_df["Average Maximum Salary"] = (
+            salary_location_df["Average Maximum Salary"]
+            .apply(lambda x: f"₹{x:,.0f}" if pd.notna(x) else "N/A")
+        )
 
         st.dataframe(
             salary_location_df,
@@ -672,23 +689,24 @@ with job_explorer:
             key="job_explorer_title",
         )
 
-        # ----------------------------------------------------
+        # ============================================================
         # Salary Filter
-        # ----------------------------------------------------
+        # ============================================================
 
-        salary_values = jobs[
-            "Salary Min"
-        ].dropna()
+        salary_values = jobs["Salary Min"].dropna()
 
-        if not salary_values.empty:
+        use_salary_filter = st.checkbox(
+            "Filter by minimum annual salary",
+            value=False,
+            key="job_explorer_use_salary"
+        )
 
-            min_salary = int(
-                salary_values.min()
-            )
+        selected_salary = None
 
-            max_salary = int(
-                salary_values.max()
-            )
+        if use_salary_filter and not salary_values.empty:
+
+            min_salary = int(salary_values.min())
+            max_salary = int(salary_values.max())
 
             selected_salary = st.slider(
                 "Minimum annual salary",
@@ -697,11 +715,8 @@ with job_explorer:
                 value=min_salary,
                 step=100000,
                 format="₹%d",
-                key="job_explorer_salary",
+                key="job_explorer_salary"
             )
-
-        else:
-            selected_salary = None
 
         # ----------------------------------------------------
         # Apply Filters
