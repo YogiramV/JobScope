@@ -1,0 +1,52 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: jobscope-postgres
+    environment:
+      POSTGRES_DB: jobscope
+      POSTGRES_USER: jobscope
+      POSTGRES_PASSWORD: jobscope
+    ports:
+      - "5432:5432"
+    volumes:
+      - jobscope_postgres_data:/var/lib/postgresql/data
+
+  streamlit:
+    build: .
+    container_name: jobscope-streamlit
+    ports:
+      - "8501:8501"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: jobscope
+      POSTGRES_USER: jobscope
+      POSTGRES_PASSWORD: jobscope
+    depends_on:
+      - postgres
+
+  airflow:
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile
+    container_name: jobscope-airflow
+    ports:
+      - "8080:8080"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: jobscope
+      POSTGRES_USER: jobscope
+      POSTGRES_PASSWORD: jobscope
+      JOB_SCOPE_PATH: /opt/jobscope
+      JOB_SCOPE_S3_BUCKET: jobscope-data
+      SERPAPI_API_KEY: ${SERPAPI_API_KEY}
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./:/opt/jobscope
+      - ${HOME}/.aws:/home/airflow/.aws:ro
+    depends_on:
+      - postgres
+    command: airflow standalone
+volumes:
+  jobscope_postgres_data:

@@ -1,0 +1,6 @@
+boto3
+python-dotenv
+serpapi
+pyspark
+psycopg2-binary
+pandas
