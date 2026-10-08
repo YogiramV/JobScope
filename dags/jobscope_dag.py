@@ -33,6 +33,7 @@ sys.path.insert(0, DATABASE_PATH)
 # ============================================================
 
 from database.load_skills import load_skills
+from database.tables import create_tables
 from skill_extractor import extract_all_job_skills
 from database.analytics import get_active_search_configurations
 from database.loader import load_jobs
@@ -240,7 +241,16 @@ with DAG(
     schedule=None,
     catchup=False,
 ) as dag:
+    
+    # --------------------------------------------------------
+    # Create Tables
+    # --------------------------------------------------------
 
+    create_tables_task = PythonOperator(
+        task_id="create_tables",
+        python_callable=create_tables,
+    )
+    
     # --------------------------------------------------------
     # Fetch Jobs
     # --------------------------------------------------------
@@ -299,7 +309,8 @@ with DAG(
     # --------------------------------------------------------
 
     (
-        fetch_jobs_task
+        create_tables_task
+        >> fetch_jobs_task
         >> process_jobs_task
         >> load_jobs_task
         >> load_skills_task
