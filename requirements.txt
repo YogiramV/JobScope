@@ -1,7 +1,7 @@
 streamlit
 boto3
-dotenv
-json
-serpapi
+python-dotenv
+google-search-results
 pyspark
-psycopg2
+psycopg2-binary
+pandas
