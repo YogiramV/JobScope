@@ -17,10 +17,7 @@ logger = logging.getLogger(__name__)
 # JobScope Project Paths
 # ============================================================
 
-JOB_SCOPE_PATH = os.getenv(
-    "JOB_SCOPE_PATH",
-    "/home/yogi/workspace/DataScience/Projects/JobScope"
-)
+JOB_SCOPE_PATH = os.getenv("JOB_SCOPE_PATH", "/opt/jobscope")
 
 DATABASE_PATH = os.path.join(
     JOB_SCOPE_PATH,

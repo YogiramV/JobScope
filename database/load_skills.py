@@ -13,7 +13,7 @@ load_dotenv()
 
 JOB_SCOPE_PATH = os.getenv(
     "JOB_SCOPE_PATH",
-    "/home/yogi/workspace/DataScience/Projects/JobScope"
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 )
 
 INPUT_FILE = os.path.join(

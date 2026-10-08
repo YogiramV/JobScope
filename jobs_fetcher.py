@@ -13,7 +13,7 @@ API_KEY = os.getenv("SERPAPI_API_KEY")
 
 JOB_SCOPE_PATH = os.getenv(
     "JOB_SCOPE_PATH",
-    "/home/yogi/workspace/DataScience/Projects/JobScope"
+    os.path.dirname(os.path.abspath(__file__))
 )
 
 RAW_DATA = os.path.join(JOB_SCOPE_PATH, "raw_data")
