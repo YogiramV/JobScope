@@ -11,8 +11,12 @@ load_dotenv()
 
 API_KEY = os.getenv("SERPAPI_API_KEY")
 
-RAW_DATA = "/home/yogi/workspace/DataScience/Projects/JobScope/raw_data"
+JOB_SCOPE_PATH = os.getenv(
+    "JOB_SCOPE_PATH",
+    "/home/yogi/workspace/DataScience/Projects/JobScope"
+)
 
+RAW_DATA = os.path.join(JOB_SCOPE_PATH, "raw_data")
 
 def fetch_jobs(role, location):
     try:
