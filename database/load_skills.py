@@ -1,12 +1,34 @@
-import pandas as pd
-
+from dotenv import load_dotenv
 from connection import get_connection
+import pandas as pd
+import os
 
 
-INPUT_FILE = "../resources/jobscope_skill_dictionary_normalized.csv"
+load_dotenv()
 
+
+# ============================================================
+# Configuration
+# ============================================================
+
+JOB_SCOPE_PATH = os.getenv(
+    "JOB_SCOPE_PATH",
+    "/home/yogi/workspace/DataScience/Projects/JobScope"
+)
+
+INPUT_FILE = os.path.join(
+    JOB_SCOPE_PATH,
+    "resources",
+    "jobscope_skill_dictionary_normalized.csv"
+)
+
+
+# ============================================================
+# Load Skills
+# ============================================================
 
 def load_skills():
+
     df = pd.read_csv(INPUT_FILE)
 
     conn = get_connection()
@@ -38,6 +60,10 @@ def load_skills():
     finally:
         conn.close()
 
+
+# ============================================================
+# Main
+# ============================================================
 
 if __name__ == "__main__":
     load_skills()

@@ -35,12 +35,12 @@ sys.path.insert(0, DATABASE_PATH)
 # JobScope Imports
 # ============================================================
 
-from jobs_fetcher import get_jobs
-from jobs_processor import process_jobs
-from database.loader import load_jobs
-from database.analytics import get_active_search_configurations
+from database.load_skills import load_skills
 from skill_extractor import extract_all_job_skills
-
+from database.analytics import get_active_search_configurations
+from database.loader import load_jobs
+from jobs_processor import process_jobs
+from jobs_fetcher import get_jobs
 
 # ============================================================
 # Data Paths
@@ -54,6 +54,7 @@ BUCKET_NAME = os.getenv(
 # ============================================================
 # Task 1 - Fetch Jobs
 # ============================================================
+
 
 def fetch_job_data():
 
@@ -277,6 +278,15 @@ with DAG(
     )
 
     # --------------------------------------------------------
+    # Load Skills
+    # --------------------------------------------------------
+
+    load_skills_task = PythonOperator(
+        task_id="load_skills",
+        python_callable=load_skills,
+    )
+
+    # --------------------------------------------------------
     # Extract Skills
     # --------------------------------------------------------
 
@@ -295,5 +305,6 @@ with DAG(
         fetch_jobs_task
         >> process_jobs_task
         >> load_jobs_task
+        >> load_skills_task
         >> extract_skills_task
     )
